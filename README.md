@@ -60,7 +60,10 @@ flowchart LR
 All word widths, NCO tables and coefficients are defined once, in
 [`model/design.py`](model/design.py), which generates
 [`rtl/ddc_params_pkg.vhd`](rtl/ddc_params_pkg.vhd). The RTL and the model can't drift apart,
-and CI fails if the committed package is out of date.
+and CI fails if the committed package is out of date. The quantized coefficients are frozen in
+[`model/coefficients.json`](model/coefficients.json), so a different NumPy/SciPy build can't
+flip a coefficient that rounds near ½ LSB. Re-designing the filter is an explicit step
+(`python -m model.design --redesign`).
 
 ## Results and analysis
 
@@ -212,6 +215,7 @@ make synth T=1 M=1         # optional: Vivado out-of-context build of one config
 ```
 ├── model/
 │   ├── design.py        parameters, filter design, VHDL package generator
+│   ├── coefficients.json  frozen quantized FIR coefficients
 │   ├── ddc_model.py     bit-accurate model and test-vector generator
 │   ├── analyze.py       filter figures (magnitude, group delay, step response)
 │   └── plot_results.py  latency figures (by configuration, waterfall)

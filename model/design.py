@@ -2,7 +2,14 @@
 
 `python -m model.design` regenerates rtl/ddc_params_pkg.vhd, so the RTL and the bit-accurate
 model in ddc_model.py always use exactly the same numbers.
+
+The quantized FIR coefficients are frozen in model/coefficients.json. The filter design runs in
+floating point, and different NumPy/SciPy builds can round a coefficient that sits close to
+x.5 LSB either way, so re-running the design must not silently change the hardware.
+Re-design deliberately with `python -m model.design --redesign`, then re-run the tests.
 """
+import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -86,11 +93,39 @@ def quantize(h):
     return q
 
 
-H_LINEAR = design_linear_phase()
-H_MINPHASE = design_minimum_phase(H_LINEAR)
-COEF_LINEAR = quantize(H_LINEAR)
-COEF_MINPHASE = quantize(H_MINPHASE)
-COEFS = {"linear": COEF_LINEAR, "minphase": COEF_MINPHASE}
+COEF_FILE = ROOT / "model" / "coefficients.json"
+
+
+def redesign():
+    """Run the floating-point design and quantize: {"linear": [...], "minphase": [...]}."""
+    h_lin = design_linear_phase()
+    return {"linear": quantize(h_lin), "minphase": quantize(design_minimum_phase(h_lin))}
+
+
+def write_coefficients(coefs, path=COEF_FILE):
+    import numpy
+    import scipy
+    data = {"_note": "Frozen quantized FIR coefficients (Q1.%d). Regenerate deliberately with "
+                     "`python -m model.design --redesign`." % COEF_FRAC,
+            "designed_with": {"numpy": numpy.__version__, "scipy": scipy.__version__},
+            **coefs}
+    path.write_text(json.dumps(data, indent=1) + "\n")
+    return path
+
+
+def load_coefficients(path=COEF_FILE):
+    data = json.loads(path.read_text())
+    coefs = {name: [int(v) for v in data[name]] for name in ("linear", "minphase")}
+    lim = 2 ** (COEF_W - 1)
+    for name, c in coefs.items():
+        assert len(c) == FIR_TAPS, f"{name}: {len(c)} taps, expected {FIR_TAPS}"
+        assert all(-lim <= v < lim for v in c), f"{name}: coefficient overflows COEF_W"
+    return coefs
+
+
+COEFS = load_coefficients()
+COEF_LINEAR = COEFS["linear"]
+COEF_MINPHASE = COEFS["minphase"]
 
 
 # ------------------------------------------------------------------ VHDL package
@@ -116,9 +151,9 @@ package ddc_params_pkg is
 
   type coef_t is array (0 to FIR_TAPS - 1) of integer;
   -- Linear-phase channel filter with CIC droop compensation (group delay {(FIR_TAPS - 1) // 2} samples).
-  constant COEF_LINEAR : coef_t := {_vhdl_array(COEF_LINEAR)};
+  constant COEF_LINEAR : coef_t := {_vhdl_array(COEFS["linear"])};
   -- Minimum-phase filter with the same magnitude response (lower group delay).
-  constant COEF_MINPHASE : coef_t := {_vhdl_array(COEF_MINPHASE)};
+  constant COEF_MINPHASE : coef_t := {_vhdl_array(COEFS["minphase"])};
 end package;
 """
     path.write_text(text)
@@ -126,4 +161,11 @@ end package;
 
 
 if __name__ == "__main__":
+    if "--redesign" in sys.argv:
+        new = redesign()
+        for name in new:
+            diff = [k for k, (a, b) in enumerate(zip(COEFS[name], new[name])) if a != b]
+            print(f"{name}: {len(diff)} coefficient(s) changed" + (f" (taps {diff})" if diff else ""))
+        print(f"wrote {write_coefficients(new)}")
+        COEFS.update(new)
     print(f"wrote {write_vhdl_package()}")
