@@ -1,6 +1,6 @@
 """Latency result plots for the README.
 
-python -m model.plot_results  ->  docs/figures/latency_by_config.png, latency_waterfall.png
+python -m model.plot_results  ->  doc/images/latency_by_config.png, latency_waterfall.png
 
 Uses the latencies measured in RTL simulation (build/results/, written by run.py). Until the
 RTL has been simulated it plots a cycle-exact *prediction* instead and says so in the titles:
@@ -16,7 +16,7 @@ from . import design as d  # noqa: E402
 from .ddc_model import ddc, step_stimulus  # noqa: E402
 
 RESULT_DIR = d.ROOT / "build" / "results"
-FIG_DIR = d.ROOT / "docs" / "figures"
+FIG_DIR = d.ROOT / "doc" / "images"
 F_CLK_MHZ = 245.76
 
 CONFIGS = [  # (name, label, transposed, minphase); order = baseline first

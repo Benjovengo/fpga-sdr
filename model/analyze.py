@@ -1,6 +1,6 @@
 """Filter analysis and figures for the README.
 
-python -m model.analyze  ->  docs/figures/*.png and a summary of the latency/quality trade-off.
+python -m model.analyze  ->  doc/images/*.png and a summary of the latency/quality trade-off.
 """
 from pathlib import Path
 
@@ -14,7 +14,7 @@ from scipy import signal  # noqa: E402
 from . import design as d  # noqa: E402
 from .ddc_model import ddc, step_stimulus  # noqa: E402
 
-FIG_DIR = d.ROOT / "docs" / "figures"
+FIG_DIR = d.ROOT / "doc" / "images"
 N_FFT = 4096
 
 
