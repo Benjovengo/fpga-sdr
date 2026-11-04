@@ -2,7 +2,8 @@
 """Run all RTL tests with VUnit.
 
 1. Regenerates rtl/ddc_params_pkg.vhd and the golden vectors from the Python model.
-2. Simulates tb_ddc in four configurations (FIR structure x FIR phase).
+2. Simulates tb_ddc in four configurations (FIR structure x FIR phase), and the board-level
+   testbench tb_de10nano.
 3. Collects the measured latencies into doc/results.md.
 
 Usage:  python run.py            (all tests; add -p 4 to run in parallel, -v for verbose)
@@ -38,6 +39,7 @@ def main():
     vu.add_vhdl_builtins()
     lib = vu.add_library("lib")
     lib.add_source_files(ROOT / "rtl" / "*.vhd")
+    lib.add_source_files(ROOT / "boards" / "*" / "*.vhd")
     lib.add_source_files(ROOT / "tb" / "*.vhd")
 
     tb = lib.test_bench("tb_ddc")
