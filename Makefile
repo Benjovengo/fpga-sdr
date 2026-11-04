@@ -1,6 +1,6 @@
 PY := .venv/bin/python
 
-.PHONY: all venv sim analyze package synth synth-all clean
+.PHONY: all venv sim analyze package quartus synth synth-all clean
 
 all: sim analyze
 
@@ -23,7 +23,11 @@ analyze: venv
 	$(PY) -m model.analyze
 	$(PY) -m model.plot_results
 
-# Resource/timing numbers for one configuration (needs Vivado): make synth T=1 M=1
+# DE10-Nano bitstream (needs Intel Quartus Prime)
+quartus:
+	quartus_sh -t boards/de10nano/build.tcl
+
+# Optional: resource/timing numbers for one configuration with Vivado: make synth T=1 M=1
 T ?= 1
 M ?= 1
 synth:
