@@ -42,8 +42,8 @@ adder level and the output: 3 + ⌈log2(31)⌉ = 8 cycles from input to output.
 The transposed form multiplies the *incoming* sample by all coefficients at once and accumulates
 into a chain of partial-sum registers, so the output is ready **one cycle** after the input,
 independent of the number of taps. It still runs fast because each tap is a single
-multiply-add, which is exactly what a DSP48 slice implements (`P = A*B + C`, with the partial
-sum in the P register). The cost is a high fan-out on the input sample, which matters at very
+multiply-add, which is exactly what an FPGA DSP block implements (`P = A*B + C`, with the partial
+sum in its output register). The cost is a high fan-out on the input sample, which matters at very
 large tap counts (it can be fixed with a short input register tree, or a systolic form).
 
 ## Technique 3: no buffering, sample-by-sample streaming
@@ -55,7 +55,7 @@ sample as soon as it exists, using a valid strobe.
 ## What is *not* done, on purpose
 
 * **Removing pipeline registers in the NCO/mixer.** They cost 3 cycles out of 100+ and are
-  what lets the design close timing at ~250 MHz on a Zynq-7000. Latency work starts with the
+  what let the design run at high clock rates (the target is ~250 MHz). Latency work starts with the
   biggest contributor.
 * **Lowering the decimation or the CIC order.** That reduces latency too, but changes the
   receiver's selectivity and output rate, i.e. it's a different spec, not an optimization.
@@ -77,4 +77,4 @@ Both are reported for all four configurations in [results.md](results.md), gener
 * Polyphase decimating FIR after a lower-order CIC (less droop, fewer taps for the same spec)
 * Half-band decimation stages (about half the coefficients are zero)
 * An AXI-Lite register interface for `phase_inc` and the coefficient set
-* Deploy on an ADALM-PLUTO (Zynq-7010 + AD9363) and measure latency on hardware with an ILA
+* Measure latency on the DE10-Nano (Intel Cyclone V) with Signal Tap (board target in `boards/de10nano/`)

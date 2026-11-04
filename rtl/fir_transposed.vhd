@@ -3,7 +3,7 @@
 -- The new sample is multiplied by every coefficient at once and added into a chain of partial
 -- sums, so the output is registered one clock after the input: 1 cycle of structural latency
 -- instead of 3 + clog2(taps). Each tap is one multiply-add, which maps onto a DSP slice
--- with its post-adder (A*B + C) and the partial-sum register in its P register.
+-- with its adder (A*B + C) and the partial-sum register in its output register.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;

@@ -9,7 +9,7 @@ fixed-point model, and built to answer one engineering question:
 ![VHDL](https://img.shields.io/badge/RTL-VHDL-0b5394)
 ![Verification](https://img.shields.io/badge/verification-VUnit%20%2B%20GHDL-2a78d6)
 ![Model](https://img.shields.io/badge/model-Python%20%2F%20SciPy-3776ab)
-![Target](https://img.shields.io/badge/target-AMD%20Zynq--7000-eb6834)
+![Target](https://img.shields.io/badge/target-Intel%20Cyclone%20V%20%C2%B7%20DE10--Nano-eb6834)
 
 ## Key results
 
@@ -54,7 +54,7 @@ flowchart LR
 | NCO + mixer | [`rtl/nco_mixer.vhd`](rtl/nco_mixer.vhd) | `y = x·e^(-jφ)`; Q1.15 sin/cos tables; four registered multipliers |
 | CIC decimator | [`rtl/cic_decim.vhd`](rtl/cic_decim.vhd) | Integrators at input rate, combs on decimated samples; gain R^N = 2^9 removed by a shift (DC gain exactly 1) |
 | FIR, adder tree | [`rtl/fir_tree.vhd`](rtl/fir_tree.vhd) | Delay line, products, 5 adder levels and output all registered: 8 cycles |
-| FIR, transposed | [`rtl/fir_transposed.vhd`](rtl/fir_transposed.vhd) | Partial-sum chain; output 1 cycle after input, maps onto DSP48 multiply-add |
+| FIR, transposed | [`rtl/fir_transposed.vhd`](rtl/fir_transposed.vhd) | Partial-sum chain; output 1 cycle after input, each tap one DSP-block multiply-add |
 | Top level | [`rtl/ddc_top.vhd`](rtl/ddc_top.vhd) | Generics `G_TRANSPOSED` and `G_MINPHASE` select the variant |
 
 All word widths, NCO tables and coefficients are defined once, in
@@ -150,7 +150,7 @@ a fast response, the gain is smaller than the 50 % metric suggests.
 
 | Decision | Chosen | Alternative | Why |
 |---|---|---|---|
-| FIR structure | Transposed form | Pipelined adder tree | 1 cycle instead of 8, independent of tap count; each tap is one DSP48 multiply-add |
+| FIR structure | Transposed form | Pipelined adder tree | 1 cycle instead of 8, independent of tap count; each tap is one DSP-block multiply-add |
 | FIR phase | Minimum phase (selectable) | Linear phase | 11 fewer samples (88 cycles) of delay, same magnitude; costs phase linearity |
 | Data path | Sample-by-sample streaming, valid strobe | Block/FIFO-based | No buffering latency; a radio front-end can't be back-pressured anyway |
 | CIC arithmetic | Wrap-around, no saturation | Saturating | Exact for a CIC with N·log₂R guard bits; fewer LUTs, no extra pipeline stages |
@@ -168,17 +168,34 @@ The full write-up is in **[doc/latency.md](doc/latency.md)**.
     sample must equal the model.
   - `latency_step`: a DC step, also checked bit-exactly. Measures cycles to the first response
     and to 50 % of the final value.
-- **Result:** 8 of 8 simulations pass. Every output sample of every configuration is identical
+- **Board-level testbench.** [`tb/tb_de10nano.vhd`](tb/tb_de10nano.vhd) drives the DE10-Nano
+  top-level pins: switches, reset, an ADC model on the GPIO header, and the LED meter.
+- **Result:** 12 of 12 simulations pass (8 DDC, 4 board). Every DDC output sample is identical
   to the model, and the measured latencies equal the predicted ones exactly.
-- **Four configurations** (structure × phase) run per test, 8 simulations in total.
+- **Four configurations** (structure × phase) run per DDC test, 8 DDC simulations in total.
   [`run.py`](run.py) regenerates the vectors from the model first and writes
   [`doc/results.md`](doc/results.md) afterwards.
 - **Continuous integration.** [`.github/workflows/sim.yml`](.github/workflows/sim.yml) runs
   everything with GHDL on every push and publishes the latency table in the job summary.
 
+## Hardware target: Terasic DE10-Nano
+
+The design targets an **Intel Cyclone V SoC (5CSEBA6U23I7)** on a
+[Terasic DE10-Nano](https://www.terasic.com.tw/cgi-bin/page/archive.pl?Language=English&No=1046),
+in the low-latency configuration, at 50 MSPS:
+
+* **Input:** a built-in 10 MHz test tone, or a 12-bit parallel ADC module (AD9226 class) on the
+  GPIO_0 header, clocked by the FPGA.
+* **Tuning:** three slide switches set the NCO from 6 to 13 MHz in 1 MHz steps.
+* **Output:** the 8 LEDs show the signal level in the tuned channel, 6 dB per LED.
+
+Pin assignments are cross-checked against three independent sources. Wiring, controls and the
+build are in **[boards/de10nano/README.md](boards/de10nano/README.md)**.
+
 ## Getting started
 
-Requirements: Python ≥ 3.10 and [GHDL](https://github.com/ghdl/ghdl). Vivado is optional, for
+Requirements: Python ≥ 3.10 and [GHDL](https://github.com/ghdl/ghdl). Quartus Prime Lite (free)
+builds the DE10-Nano bitstream; Vivado is optional, for
 resource and timing reports only.
 
 ```bash
@@ -186,7 +203,8 @@ sudo apt install ghdl      # Ubuntu / Debian
 make venv                  # Python environment: numpy, scipy, matplotlib, VUnit
 make sim                   # 8 RTL simulations, bit-exact checks, doc/results.md
 make analyze               # all figures in doc/images/ + filter summary
-make synth T=1 M=1         # Vivado out-of-context build of one configuration
+make quartus               # DE10-Nano bitstream (Intel Quartus Prime)
+make synth T=1 M=1         # optional: Vivado out-of-context build of one configuration
 ```
 
 ## Repository layout
@@ -199,7 +217,8 @@ make synth T=1 M=1         # Vivado out-of-context build of one configuration
 │   └── plot_results.py  latency figures (by configuration, waterfall)
 ├── rtl/                 synthesizable VHDL (ddc_params_pkg.vhd is generated)
 ├── tb/                  VUnit testbench
-├── syn/                 Vivado non-project Tcl flow and constraints
+├── boards/de10nano/     DE10-Nano top level, pins, timing constraints, Quartus build
+├── syn/                 optional Vivado non-project Tcl flow
 ├── doc/
 │   ├── latency.md       design notes on latency
 │   ├── results.md       measured latency table (generated by run.py)
@@ -217,12 +236,14 @@ make synth T=1 M=1         # Vivado out-of-context build of one configuration
 | Filter design | Weighted least-squares FIR, minimum-phase conversion, quantization analysis |
 | Latency engineering | Structural vs. algorithmic latency, quantified per technique |
 | Verification | Bit-exact golden model, self-checking VUnit testbench, cycle-accurate measurement |
-| Tooling | Python-generated VHDL, Makefile flow, GitHub Actions CI, Vivado Tcl |
+| Board bring-up | Pin assignments, SDC input timing for an external ADC, synchronizers, Quartus Tcl |
+| Tooling | Python-generated VHDL, Makefile flow, GitHub Actions CI |
 
 ## Roadmap
 
 - [x] RTL-measured latency, matching the model-based prediction cycle for cycle
-- [ ] Vivado utilization and timing for all four configurations on a Zynq-7010
+- [x] Board target: Terasic DE10-Nano (Intel Cyclone V), with a board-level testbench
+- [ ] Quartus fit and timing report, then an on-board test on the DE10-Nano
 - [ ] AXI-Lite register interface (phase increment, coefficient bank) and AXI-Stream wrapper
 - [ ] Half-band and polyphase decimation stages
-- [ ] Hardware run on an ADALM-PLUTO (Zynq-7010 + AD9363), with latency captured on an ILA
+- [ ] Latency captured on hardware with Signal Tap
