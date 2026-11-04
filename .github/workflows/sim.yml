@@ -1,0 +1,32 @@
+name: RTL simulation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  vunit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install GHDL
+        run: sudo apt-get update && sudo apt-get install -y ghdl
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+      - name: Bit-exact and latency tests (4 configurations)
+        run: python run.py -p 4 --xunit-xml build/vunit.xml
+      - name: Check the generated VHDL package is committed and up to date
+        run: git diff --exit-code rtl/ddc_params_pkg.vhd
+      - name: Latency table
+        if: always()
+        run: cat doc/results.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results
+          path: |
+            build/vunit.xml
+            doc/results.md
